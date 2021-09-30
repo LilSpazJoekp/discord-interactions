@@ -8,7 +8,7 @@ from ..context import ComponentContext
 from ..error import IncorrectFormat, IncorrectType
 from ..model import ButtonStyle, ComponentType
 
-logger = logging.getLogger("discord_slash")
+log = logging.getLogger(__name__)
 
 
 def create_actionrow(*components: dict) -> dict:
@@ -133,7 +133,7 @@ def create_button(
 
     if custom_id is not None and not isinstance(custom_id, str):
         custom_id = str(custom_id)
-        logger.warning(
+        log.warning(
             "Custom_id has been automatically converted to a string. Please use strings in future\n"
             "Note: Discord will always return custom_id as a string"
         )
@@ -178,7 +178,7 @@ def create_select_option(
         raise IncorrectFormat("Label length should be between 1 and 100.")
     if not isinstance(value, str):
         value = str(value)
-        logger.warning(
+        log.warning(
             "Value has been automatically converted to a string. Please use strings in future\n"
             "Note: Discord will always return value as a string"
         )
@@ -307,7 +307,7 @@ async def wait_for_component(
     # automatically convert improper custom_ids
     if custom_ids and not all(isinstance(x, str) for x in custom_ids):
         custom_ids = [str(i) for i in custom_ids]
-        logger.warning(
+        log.warning(
             "Custom_ids have been automatically converted to a list of strings. Please use lists of strings in future.\n"
             "Note: Discord will always return custom_ids as strings"
         )

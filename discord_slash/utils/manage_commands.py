@@ -6,6 +6,7 @@ from typing import Union
 
 import aiohttp
 
+from ..const import BASE_API
 from ..error import IncorrectType, RequestFailure
 from ..model import SlashCommandOptionType, SlashCommandPermissionType
 
@@ -25,7 +26,7 @@ async def add_slash_command(
     :return: JSON Response of the request.
     :raises: :class:`.error.RequestFailure` - Requesting to Discord API has failed.
     """
-    url = f"https://discord.com/api/v8/applications/{bot_id}"
+    url = f"{BASE_API}/applications/{bot_id}"
     url += "/commands" if not guild_id else f"/guilds/{guild_id}/commands"
     base = {"name": cmd_name, "description": description, "options": options or []}
 
@@ -55,7 +56,7 @@ async def remove_slash_command(bot_id, bot_token, guild_id, cmd_id):
     :return: Response code of the request.
     :raises: :class:`.error.RequestFailure` - Requesting to Discord API has failed.
     """
-    url = f"https://discord.com/api/v8/applications/{bot_id}"
+    url = f"{BASE_API}/applications/{bot_id}"
     url += "/commands" if not guild_id else f"/guilds/{guild_id}/commands"
     url += f"/{cmd_id}"
     async with aiohttp.ClientSession() as session:
@@ -79,7 +80,7 @@ async def get_all_commands(bot_id, bot_token, guild_id=None):
     :return: JSON Response of the request.
     :raises: :class:`.error.RequestFailure` - Requesting to Discord API has failed.
     """
-    url = f"https://discord.com/api/v8/applications/{bot_id}"
+    url = f"{BASE_API}/applications/{bot_id}"
     url += "/commands" if not guild_id else f"/guilds/{guild_id}/commands"
     async with aiohttp.ClientSession() as session:
         async with session.get(url, headers={"Authorization": f"Bot {bot_token}"}) as resp:
@@ -134,7 +135,7 @@ async def get_all_guild_commands_permissions(bot_id, bot_token, guild_id):
     :return: JSON Response of the request. A list of <https://discord.com/developers/docs/interactions/application-commands#get-application-command-permissions>.
     :raises: :class:`.error.RequestFailure` - Requesting to Discord API has failed.
     """
-    url = f"https://discord.com/api/v8/applications/{bot_id}/guilds/{guild_id}/commands/permissions"
+    url = f"{BASE_API}/applications/{bot_id}/guilds/{guild_id}/commands/permissions"
     async with aiohttp.ClientSession() as session:
         async with session.get(url, headers={"Authorization": f"Bot {bot_token}"}) as resp:
             if resp.status == 429:
@@ -157,7 +158,7 @@ async def get_guild_command_permissions(bot_id, bot_token, guild_id, command_id)
     :return: JSON Response of the request. A list of <https://discord.com/developers/docs/interactions/application-commands#edit-application-command-permissions>
     :raises: :class:`.error.RequestFailure` - Requesting to Discord API has failed.
     """
-    url = f"https://discord.com/api/v8/applications/{bot_id}/guilds/{guild_id}/commands/{command_id}/permissions"
+    url = f"{BASE_API}/applications/{bot_id}/guilds/{guild_id}/commands/{command_id}/permissions"
     async with aiohttp.ClientSession() as session:
         async with session.get(url, headers={"Authorization": f"Bot {bot_token}"}) as resp:
             if resp.status == 429:
@@ -181,7 +182,7 @@ async def update_single_command_permissions(bot_id, bot_token, guild_id, command
     :return: JSON Response of the request. A list of <https://discord.com/developers/docs/interactions/application-commands#edit-application-command-permissions>
     :raises: :class:`.error.RequestFailure` - Requesting to Discord API has failed.
     """
-    url = f"https://discord.com/api/v8/applications/{bot_id}/guilds/{guild_id}/commands/{command_id}/permissions"
+    url = f"{BASE_API}/applications/{bot_id}/guilds/{guild_id}/commands/{command_id}/permissions"
     async with aiohttp.ClientSession() as session:
         async with session.put(
             url, headers={"Authorization": f"Bot {bot_token}"}, json={"permissions": permissions}
@@ -208,7 +209,7 @@ async def update_guild_commands_permissions(bot_id, bot_token, guild_id, cmd_per
     :return: JSON Response of the request. A list of <https://discord.com/developers/docs/interactions/application-commands#batch-edit-application-command-permissions>.
     :raises: :class:`.error.RequestFailure` - Requesting to Discord API has failed.
     """
-    url = f"https://discord.com/api/v8/applications/{bot_id}/guilds/{guild_id}/commands/permissions"
+    url = f"{BASE_API}/applications/{bot_id}/guilds/{guild_id}/commands/permissions"
     async with aiohttp.ClientSession() as session:
         async with session.put(
             url, headers={"Authorization": f"Bot {bot_token}"}, json=cmd_permissions
@@ -243,7 +244,7 @@ def create_option(
 
     .. note::
         An option with ``required=False`` will not pass anything to the command function if the user doesn't pass that option when invoking the command.
-        You must set the the relevant argument's function to a default argument, eg ``argname = None``.
+        You must set the relevant argument's function to a default argument, eg ``argname = None``.
 
     .. note::
         ``choices`` must either be a list of `option type dicts <https://discord.com/developers/docs/interactions/application-commands#application-command-object-application-command-option-choice-structure>`_

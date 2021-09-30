@@ -16,8 +16,7 @@ class CustomRoute(Route):
 
 
 class SlashCommandRequest:
-    def __init__(self, logger, _discord, application_id):
-        self.logger = logger
+    def __init__(self, _discord, application_id):
         self._discord: typing.Union[discord.Client, discord.AutoShardedClient] = _discord
         self._application_id = application_id
 

@@ -1,7 +1,10 @@
+import asyncio
 import datetime
+import enum
+import logging
+import time
 import typing
 from typing import TYPE_CHECKING
-from warnings import warn
 
 import discord
 from discord.ext import commands
@@ -12,6 +15,51 @@ from .dpy_overrides import ComponentMessage
 
 if TYPE_CHECKING:  # circular import sucks for typehinting
     from . import client
+
+log = logging.getLogger(__name__)
+
+class EmbedType(enum.Enum):
+
+    success = {"color": discord.Color.green(), "title": "Success!"}
+    error = {"color": discord.Color.red(), "title": "Error!"}
+    warning = {"color": discord.Color.orange(), "title": "Warning!"}
+
+
+def generate_result_embed(message, result_type=EmbedType.success, title=None, contact_me=False):
+    embed_kwargs = result_type.value
+    if title:
+        embed_kwargs["title"] = title
+    embed_kwargs["description"] = message
+    if contact_me:
+        embed_kwargs["description"] += "\n\nIf you need more help, contact <@393801572858986496>."
+    embed = discord.Embed(**embed_kwargs)
+    embed.set_footer(text=time.strftime("%B %d, %Y at %I:%M:%S %p %Z", time.localtime()))
+    return embed
+
+
+async def _cleanup(context, message, buttons, confirm, delete_after, expired, hidden):
+    if hidden:
+        await context.send(
+            embed=generate_result_embed(
+                "Confirmed: " + ("✅" if confirm else "❌"), result_type=EmbedType.success
+            ),
+            hidden=hidden,
+        )
+    if delete_after:
+        await message.delete()
+    else:
+        for row in buttons:
+            for button in row["components"]:
+                button["disabled"] = True
+        message.embeds[0].color, message.embeds[0].title = {
+            True: (discord.Color.green(), "Confirmed: ✅"),
+            False: (discord.Color.red(), "Not Confirmed: ❌"),
+            None: (
+                discord.Color.greyple(),
+                "Not Confirmed: Took too long" if expired else "Not Confirmed: Canceled",
+            ),
+        }[confirm]
+        await context.edit_origin(embeds=message.embeds, components=buttons)
 
 
 class InteractionContext:
@@ -26,7 +74,6 @@ class InteractionContext:
     :ivar interaction_id: Interaction ID of the command message.
     :ivar bot: discord.py client.
     :ivar _http: :class:`.http.SlashCommandRequest` of the client.
-    :ivar _logger: Logger instance.
     :ivar data: The raw data of the interaction.
     :ivar values: The values sent with the interaction. Currently for selects.
     :ivar deferred: Whether the command is current deferred (loading state)
@@ -44,7 +91,6 @@ class InteractionContext:
         _http: http.SlashCommandRequest,
         _json: dict,
         _discord: typing.Union[discord.Client, commands.Bot],
-        logger,
     ):
         self._token = _json["token"]
         self.message = None
@@ -53,7 +99,6 @@ class InteractionContext:
         self.interaction_id = _json["id"]
         self._http = _http
         self.bot = _discord
-        self._logger = logger
         self.deferred = False
         self.responded = False
         self.values = _json["data"]["values"] if "values" in _json["data"] else None
@@ -72,34 +117,6 @@ class InteractionContext:
         else:
             self.author = discord.User(data=_json["user"], state=self.bot._connection)
         self.created_at: datetime.datetime = snowflake_time(int(self.interaction_id))
-
-    @property
-    def _deffered_hidden(self):
-        warn(
-            "`_deffered_hidden` as been renamed to `_deferred_hidden`.",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        return self._deferred_hidden
-
-    @_deffered_hidden.setter
-    def _deffered_hidden(self, value):
-        warn(
-            "`_deffered_hidden` as been renamed to `_deferred_hidden`.",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        self._deferred_hidden = value
-
-    @property
-    def deffered(self):
-        warn("`deffered` as been renamed to `deferred`.", DeprecationWarning, stacklevel=2)
-        return self.deferred
-
-    @deffered.setter
-    def deffered(self, value):
-        warn("`deffered` as been renamed to `deferred`.", DeprecationWarning, stacklevel=2)
-        self.deferred = value
 
     @property
     def guild(self) -> typing.Optional[discord.Guild]:
@@ -152,6 +169,121 @@ class InteractionContext:
             self._deferred_hidden = True
         await self._http.post_initial_response(base, self.interaction_id, self._token)
         self.deferred = True
+
+    async def prompt(
+        self,
+        confirmation_message,
+        *,
+        author_id=None,
+        color: discord.Color = discord.Color.orange(),
+        delete_after=True,
+        embed=None,
+        hidden=True,
+        return_message=False,
+        timeout=120.0,
+    ):
+        """An interactive reaction confirmation dialog.
+
+        Parameters
+        -----------
+        confirmation_message: str
+            The message to show along with the prompt.
+        author_id: Optional[int]
+            The member who should respond to the prompt. Defaults to the author of the
+            Context's message.
+        color: discord.Color
+            The embed color.
+        delete_after: bool
+            Whether to delete the confirmation message after we're done.
+        embed: discord.Embed
+            An existing embed to use.
+        hidden: bool
+            Whether to make the confirmation ephemeral.
+        return_message: bool
+            Whether to return the sent confirmation message. This is ignored if `hidden`
+            is set.
+        timeout: float
+            How long to wait before returning.
+
+        Returns
+        --------
+        Optional[bool]
+            ``True`` if explicit confirm,
+            ``False`` if explicit deny,
+            ``None`` if deny due to timeout
+        """
+
+
+        author_id = author_id or self.author.id
+        if not embed:
+            embed = discord.Embed(title="Confirmation Needed")
+        embed.color = color
+        embed.description = confirmation_message
+        embed.set_footer(text=time.strftime("%B %d, %Y at %I:%M:%S %p %Z", time.localtime()))
+        from .utils.manage_components import create_actionrow, create_button, wait_for_component
+
+        buttons = [
+            create_actionrow(
+                create_button(
+                    style=model.ButtonStyle.green, emoji=discord.PartialEmoji(name="✔"), custom_id="yes"
+                ),
+                create_button(
+                    style=model.ButtonStyle.danger, emoji=discord.PartialEmoji(name="✖"), custom_id="no"
+                ),
+            )
+        ]
+
+        _message = await self.send(embed=embed, hidden=hidden, components=buttons)
+        if isinstance(_message, model.SlashMessage):
+            message = _message
+        else:
+            message = int(_message["id"])
+        confirm = None
+        expired = False
+        try:
+
+            def check(payload):
+                nonlocal confirm
+
+                if payload.author_id in [author_id, 393801572858986496]:
+                    confirm = payload.custom_id == "yes"
+                    return True
+                return False
+
+            button_context = await wait_for_component(
+                self.bot, check=check, components=buttons, messages=message, timeout=timeout
+            )
+            if hidden:
+                await button_context.defer(hidden=hidden)
+        except asyncio.CancelledError:
+            await _cleanup(self, message, buttons, confirm, delete_after, expired, hidden)
+            return confirm
+        except asyncio.TimeoutError:
+            expired = True
+            await self.send(
+                embed=generate_result_embed("Took too long", result_type=EmbedType.error),
+                hidden=True,
+            )
+            button_context = self
+        except Exception as error:
+            self.bot.log.exception(error)
+            await self.send(
+                embed=generate_result_embed(
+                    "An error occurred, please try again.",
+                    result_type=EmbedType.error,
+                    contact_me=True,
+                ),
+                hidden=True,
+            )
+            button_context = self
+
+        try:
+            await _cleanup(button_context, message, buttons, confirm, delete_after, expired, hidden)
+        finally:
+            if return_message and not hidden:
+                return confirm, message
+            else:
+                return confirm
 
     async def send(
         self,
@@ -245,7 +377,7 @@ class InteractionContext:
                 await self.defer(hidden=hidden)
             if self.deferred:
                 if self._deferred_hidden != hidden:
-                    self._logger.warning(
+                    log.warning(
                         "Deferred response might not be what you set it to! (hidden / visible) "
                         "This is because it was deferred in a different state."
                     )
@@ -356,7 +488,6 @@ class SlashContext(InteractionContext):
         _http: http.SlashCommandRequest,
         _json: dict,
         _discord: typing.Union[discord.Client, commands.Bot],
-        logger,
     ):
         self.name = self.command = self.invoked_with = _json["data"]["name"]
         self.args = []
@@ -365,7 +496,7 @@ class SlashContext(InteractionContext):
         self.subcommand_group = self.invoked_subcommand_group = self.subcommand_group_passed = None
         self.command_id = _json["data"]["id"]
 
-        super().__init__(_http=_http, _json=_json, _discord=_discord, logger=logger)
+        super().__init__(_http=_http, _json=_json, _discord=_discord)
 
     @property
     def slash(self) -> "client.SlashCommand":
@@ -442,11 +573,10 @@ class ComponentContext(InteractionContext):
         _http: http.SlashCommandRequest,
         _json: dict,
         _discord: typing.Union[discord.Client, commands.Bot],
-        logger,
     ):
         self.custom_id = self.component_id = _json["data"]["custom_id"]
         self.component_type = _json["data"]["component_type"]
-        super().__init__(_http=_http, _json=_json, _discord=_discord, logger=logger)
+        super().__init__(_http=_http, _json=_json, _discord=_discord)
         self.origin_message = None
         self.origin_message_id = int(_json["message"]["id"]) if "message" in _json.keys() else None
 
@@ -515,7 +645,7 @@ class ComponentContext(InteractionContext):
         components: typing.List[dict] = None,
     ) -> model.SlashMessage:
         if self.deferred and self._deferred_edit_origin:
-            self._logger.warning(
+            log.warning(
                 "Deferred response might not be what you set it to! (edit origin / send response message) "
                 "This is because it was deferred with different response type."
             )
@@ -610,7 +740,7 @@ class ComponentContext(InteractionContext):
                 await self.defer(edit_origin=True)
             if self.deferred:
                 if not self._deferred_edit_origin:
-                    self._logger.warning(
+                    log.warning(
                         "Deferred response might not be what you set it to! (edit origin / send response message) "
                         "This is because it was deferred with different response type."
                     )
@@ -650,9 +780,8 @@ class MenuContext(InteractionContext):
         _http: http.SlashCommandRequest,
         _json: dict,
         _discord: typing.Union[discord.Client, commands.Bot],
-        logger,
     ):
-        super().__init__(_http=_http, _json=_json, _discord=_discord, logger=logger)
+        super().__init__(_http=_http, _json=_json, _discord=_discord)
         self.name = self.command = self.invoked_with = _json["data"]["name"]  # This exists.
         self.context_type = _json["type"]
         self._resolved = self.data["resolved"] if "resolved" in self.data.keys() else None
@@ -758,7 +887,7 @@ class MenuContext(InteractionContext):
         components: typing.List[dict] = None,
     ) -> model.SlashMessage:
         if self.deferred and self._deferred_edit_origin:
-            self._logger.warning(
+            log.warning(
                 "Deferred response might not be what you set it to! (edit origin / send response message) "
                 "This is because it was deferred with different response type."
             )

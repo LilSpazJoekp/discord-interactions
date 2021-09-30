@@ -21,6 +21,9 @@ def _get_val(d: dict, key):  # util function to get value from dict with fallbac
     return value
 
 
+log = logging.getLogger(__name__)
+
+
 class SlashCommand:
     """
     Slash command handler class.
@@ -68,8 +71,7 @@ class SlashCommand:
         self.commands = {"context": {}}
         self.subcommands = {}
         self.components = {}
-        self.logger = logging.getLogger("discord_slash")
-        self.req = http.SlashCommandRequest(self.logger, self._discord, application_id)
+        self.req = http.SlashCommandRequest(self._discord, application_id)
         self.sync_commands = sync_commands
         self.debug_guild = debug_guild
         self.sync_on_cog_reload = sync_on_cog_reload
@@ -82,7 +84,7 @@ class SlashCommand:
             and not isinstance(client, commands.AutoShardedBot)
             and not override_type
         ):
-            self.logger.warning(
+            log.warning(
                 "Detected discord.Client! It is highly recommended to use `commands.Bot`. Do not add any `on_socket_response` event."
             )
 
@@ -136,7 +138,7 @@ class SlashCommand:
         :type cog: discord.ext.commands.Cog
         """
         if hasattr(cog, "_slash_registered"):  # Temporary warning
-            return self.logger.warning(
+            return log.warning(
                 "Calling get_cog_commands is no longer required "
                 "to add cog slash commands. Make sure to remove all calls to this function."
             )
@@ -427,7 +429,7 @@ class SlashCommand:
         """
         permissions_map = {}
         cmds = await self.to_dict()
-        self.logger.info("Syncing commands...")
+        log.info("Syncing commands...")
         # if debug_guild is set, global commands get re-routed to the guild to update quickly
         cmds_formatted = {self.debug_guild: cmds["global"]}
         for guild in cmds["guild"]:
@@ -464,7 +466,7 @@ class SlashCommand:
                     to_send.append(command)
 
             if changed:
-                self.logger.debug(
+                log.debug(
                     f"Detected changes on {scope if scope is not None else 'global'}, updating them"
                 )
                 try:
@@ -490,7 +492,7 @@ class SlashCommand:
 
                     raise ex
             else:
-                self.logger.debug(
+                log.debug(
                     f"Detected no changes on {scope if scope is not None else 'global'}, skipping"
                 )
 
@@ -511,8 +513,8 @@ class SlashCommand:
                     }
                     permissions_map[applicable_guild].append(permission)
 
-        self.logger.info("Syncing permissions...")
-        self.logger.debug(f"Commands permission data are {permissions_map}")
+        log.info("Syncing permissions...")
+        log.debug(f"Commands permission data are {permissions_map}")
         for scope in permissions_map:
             existing_perms = await self.req.get_all_guild_commands_permissions(scope)
             new_perms = permissions_map[scope]
@@ -537,39 +539,39 @@ class SlashCommand:
                         break
 
             if changed:
-                self.logger.debug(f"Detected permissions changes on {scope}, updating them")
-                await self.req.update_guild_commands_permissions(scope, new_perms)
+                log.debug(f"Detected permissions changes on {scope}, updating them")
+                response = await self.req.update_guild_commands_permissions(scope, new_perms)
             else:
-                self.logger.debug(f"Detected no permissions changes on {scope}, skipping")
+                log.debug(f"Detected no permissions changes on {scope}, skipping")
 
         if delete_from_unused_guilds:
-            self.logger.info("Deleting unused guild commands...")
+            log.info("Deleting unused guild commands...")
             other_guilds = [
                 guild.id for guild in self._discord.guilds if guild.id not in cmds["guild"]
             ]
-            # This is an extremly bad way to do this, because slash cmds can be in guilds the bot isn't in
+            # This is an extremely bad way to do this, because slash cmds can be in guilds the bot isn't in
             # But it's the only way until discord makes an endpoint to request all the guild with cmds registered.
 
             for guild in other_guilds:
                 with suppress(discord.Forbidden):
                     existing = await self.req.get_all_commands(guild_id=guild)
                     if len(existing) != 0:
-                        self.logger.debug(f"Deleting commands from {guild}")
+                        log.debug(f"Deleting commands from {guild}")
                         await self.req.put_slash_commands(slash_commands=[], guild_id=guild)
 
         if delete_perms_from_unused_guilds:
-            self.logger.info("Deleting unused guild permissions...")
+            log.info("Deleting unused guild permissions...")
             other_guilds = [
                 guild.id for guild in self._discord.guilds if guild.id not in permissions_map.keys()
             ]
             for guild in other_guilds:
                 with suppress(discord.Forbidden):
-                    self.logger.debug(f"Deleting permissions from {guild}")
+                    log.debug(f"Deleting permissions from {guild}")
                     existing_perms = await self.req.get_all_guild_commands_permissions(guild)
                     if len(existing_perms) != 0:
                         await self.req.update_guild_commands_permissions(guild, [])
 
-        self.logger.info("Completed syncing all commands!")
+        log.info("Completed syncing all commands!")
 
     def add_slash_command(
         self,
@@ -642,7 +644,7 @@ class SlashCommand:
         }
         obj = model.BaseCommandObject(name, _cmd)
         self.commands[name] = obj
-        self.logger.debug(f"Added command `{name}`")
+        log.debug(f"Added command `{name}`")
         return obj
 
     def _cog_ext_add_context_menu(self, target: int, name: str, guild_ids: list = None):
@@ -702,7 +704,7 @@ class SlashCommand:
 
         obj = model.BaseCommandObject(name, cmd=_cmd, _type=_type)
         self.commands["context"][name] = obj
-        self.logger.debug(f"Added context command `{name}`")
+        log.debug(f"Added context command `{name}`")
         return obj
 
     def add_subcommand(
@@ -815,7 +817,7 @@ class SlashCommand:
                 raise error.DuplicateCommand(f"{base} {name}")
             obj = model.SubcommandObject(_sub, base, name)
             self.subcommands[base][name] = obj
-        self.logger.debug(
+        log.debug(
             f"Added subcommand `{base} {subcommand_group or ''} {name or cmd.__name__}`"
         )
         return obj
@@ -1111,7 +1113,7 @@ class SlashCommand:
             raise error.DuplicateCallback(message_id, custom_id, component_type)
 
         component_type_dict[component_type] = callback_obj
-        self.logger.debug(
+        log.debug(
             f"Added component callback for "
             f"message ID {message_id or '<any>'}, "
             f"custom_id `{custom_id or '<any>'}`, "
@@ -1332,7 +1334,7 @@ class SlashCommand:
                         discord.HTTPException,
                         discord.NotFound,
                     ):  # Just in case.
-                        self.logger.warning("Failed fetching discord object! Passing ID instead.")
+                        log.warning("Failed fetching discord object! Passing ID instead.")
                         processed = int(x["value"])
             to_return[connector.get(x["name"]) or x["name"]] = processed
         return to_return
@@ -1377,7 +1379,7 @@ class SlashCommand:
                         await func.on_error(ctx, ex)
                     return True
                 except Exception as e:
-                    self.logger.error(f"{ctx.command}:: Error using error decorator: {e}")
+                    log.error(f"{ctx.command}:: Error using error decorator: {e}")
         return False
 
     async def on_socket_response(self, msg):
@@ -1414,7 +1416,7 @@ class SlashCommand:
         return
 
     async def _on_component(self, to_use):
-        ctx = context.ComponentContext(self.req, to_use, self._discord, self.logger)
+        ctx = context.ComponentContext(self.req, to_use, self._discord)
         self._discord.dispatch("component", ctx)
 
         callback = self.get_component_callback(
@@ -1427,7 +1429,7 @@ class SlashCommand:
     async def _on_slash(self, to_use):  # slash commands only.
         if to_use["data"]["name"] in self.commands:
 
-            ctx = context.SlashContext(self.req, to_use, self._discord, self.logger)
+            ctx = context.SlashContext(self.req, to_use, self._discord)
             cmd_name = to_use["data"]["name"]
 
             if cmd_name not in self.commands and cmd_name in self.subcommands:
@@ -1484,7 +1486,7 @@ class SlashCommand:
             return
 
         if to_use["data"]["name"] in self.commands["context"]:
-            ctx = context.MenuContext(self.req, to_use, self._discord, self.logger)
+            ctx = context.MenuContext(self.req, to_use, self._discord)
             cmd_name = to_use["data"]["name"]
 
             if cmd_name not in self.commands["context"] and cmd_name in self.subcommands:
@@ -1513,7 +1515,7 @@ class SlashCommand:
         # Cog Logic
 
         elif to_use["data"]["name"] in self.commands:
-            ctx = context.MenuContext(self.req, to_use, self._discord, self.logger)
+            ctx = context.MenuContext(self.req, to_use, self._discord)
             cmd_name = to_use["data"]["name"]
 
             if cmd_name not in self.commands and cmd_name in self.subcommands:
@@ -1643,7 +1645,7 @@ class SlashCommand:
         """
         if not self._on_error(ctx, ex, "slash_command_error"):
             # Prints exception if not overridden or has no listener for error.
-            self.logger.exception(
+            log.exception(
                 f"An exception has occurred while executing command `{ctx.name}`:"
             )
 
@@ -1675,6 +1677,6 @@ class SlashCommand:
         """
         if not self._on_error(ctx, ex, "component_callback_error"):
             # Prints exception if not overridden or has no listener for error.
-            self.logger.exception(
+            log.exception(
                 f"An exception has occurred while executing component callback custom ID `{ctx.custom_id}`:"
             )
