@@ -38,10 +38,10 @@ def generate_result_embed(message, result_type=EmbedType.success, title=None, co
 
 
 async def _cleanup(context, message, buttons, confirm, delete_after, expired, hidden):
-    if hidden:
+    if hidden or delete_after:
         await context.send(
             embed=generate_result_embed(
-                "Confirmed: " + ("✅" if confirm else "❌"), result_type=EmbedType.success
+                "Confirmed: ✅" if confirm else "Not Confirmed: ❌", result_type=EmbedType.success
             ),
             hidden=hidden,
         )
@@ -237,7 +237,7 @@ class InteractionContext:
         if isinstance(_message, model.SlashMessage):
             message = _message
         else:
-            message = int(_message["id"])
+            message = int(_message["id"]) if _message else None
         confirm = None
         expired = False
         try:
@@ -253,8 +253,7 @@ class InteractionContext:
             button_context = await wait_for_component(
                 self.bot, check=check, components=buttons, messages=message, timeout=timeout
             )
-            if hidden:
-                await button_context.defer(hidden=hidden)
+            await button_context.defer(hidden=hidden)
         except asyncio.CancelledError:
             await _cleanup(self, message, buttons, confirm, delete_after, expired, hidden)
             return confirm
@@ -276,7 +275,6 @@ class InteractionContext:
                 hidden=True,
             )
             button_context = self
-
         try:
             await _cleanup(button_context, message, buttons, confirm, delete_after, expired, hidden)
         finally:
