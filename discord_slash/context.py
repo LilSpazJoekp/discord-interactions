@@ -44,7 +44,7 @@ async def _cleanup(context, message, buttons, confirm, delete_after, expired, hi
                 "Confirmed: ✅" if confirm else "Not Confirmed: ❌", result_type=EmbedType.success
             ),
             hidden=hidden,
-            delete_after=10,
+            delete_after=None if hidden else 10 if delete_after else None,
         )
     if delete_after:
         await message.delete()
