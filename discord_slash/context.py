@@ -18,6 +18,7 @@ if TYPE_CHECKING:  # circular import sucks for typehinting
 
 log = logging.getLogger(__name__)
 
+
 class EmbedType(enum.Enum):
 
     success = {"color": discord.Color.green(), "title": "Success!"}
@@ -214,7 +215,6 @@ class InteractionContext:
             ``None`` if deny due to timeout
         """
 
-
         author_id = author_id or self.author.id
         if not embed:
             embed = discord.Embed(title="Confirmation Needed")
@@ -226,10 +226,14 @@ class InteractionContext:
         buttons = [
             create_actionrow(
                 create_button(
-                    style=model.ButtonStyle.green, emoji=discord.PartialEmoji(name="✔"), custom_id="yes"
+                    style=model.ButtonStyle.green,
+                    emoji=discord.PartialEmoji(name="✔"),
+                    custom_id="yes",
                 ),
                 create_button(
-                    style=model.ButtonStyle.danger, emoji=discord.PartialEmoji(name="✖"), custom_id="no"
+                    style=model.ButtonStyle.danger,
+                    emoji=discord.PartialEmoji(name="✖"),
+                    custom_id="no",
                 ),
             )
         ]

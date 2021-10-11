@@ -540,7 +540,7 @@ class SlashCommand:
 
             if changed:
                 log.debug(f"Detected permissions changes on {scope}, updating them")
-                response = await self.req.update_guild_commands_permissions(scope, new_perms)
+                await self.req.update_guild_commands_permissions(scope, new_perms)
             else:
                 log.debug(f"Detected no permissions changes on {scope}, skipping")
 
@@ -817,9 +817,7 @@ class SlashCommand:
                 raise error.DuplicateCommand(f"{base} {name}")
             obj = model.SubcommandObject(_sub, base, name)
             self.subcommands[base][name] = obj
-        log.debug(
-            f"Added subcommand `{base} {subcommand_group or ''} {name or cmd.__name__}`"
-        )
+        log.debug(f"Added subcommand `{base} {subcommand_group or ''} {name or cmd.__name__}`")
         return obj
 
     def slash(
@@ -1645,9 +1643,7 @@ class SlashCommand:
         """
         if not self._on_error(ctx, ex, "slash_command_error"):
             # Prints exception if not overridden or has no listener for error.
-            log.exception(
-                f"An exception has occurred while executing command `{ctx.name}`:"
-            )
+            log.exception(f"An exception has occurred while executing command `{ctx.name}`:")
 
     async def on_component_callback_error(self, ctx, ex):
         """
