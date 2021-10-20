@@ -68,14 +68,18 @@ def cog_slash(
             raise IncorrectGuildIDType(
                 f"The snowflake IDs {guild_ids} given are not a list of integers. Because of discord.py convention, please use integer IDs instead. Furthermore, the command '{name or cmd.__name__}' will be deactivated and broken until fixed."
             )
-
+        try:
+            prev_frame = inspect.currentframe().f_back
+            default_settings = prev_frame.f_locals.get("slash_command_attrs", {})
+        except Exception:
+            default_settings = {}
         _cmd = {
             "func": cmd,
             "description": desc,
-            "guild_ids": guild_ids,
+            "guild_ids": default_settings.get("guild_ids", guild_ids),
             "api_options": opts,
-            "default_permission": default_permission,
-            "api_permissions": permissions,
+            "default_permission": default_settings.get("default_permission", default_permission),
+            "api_permissions": default_settings.get("permissions", permissions),
             "connector": connector,
             "has_subcommands": False,
         }
@@ -162,14 +166,18 @@ def cog_subcommand(
             raise IncorrectGuildIDType(
                 f"The snowflake IDs {guild_ids} given are not a list of integers. Because of discord.py convention, please use integer IDs instead. Furthermore, the command '{name or cmd.__name__}' will be deactivated and broken until fixed."
             )
-
+        try:
+            prev_frame = inspect.currentframe().f_back
+            default_settings = prev_frame.f_locals.get("slash_command_attrs", {})
+        except Exception:
+            default_settings = {}
         _cmd = {
             "func": None,
             "description": base_description,
-            "guild_ids": guild_ids.copy(),
+            "guild_ids": default_settings.get("guild_ids", guild_ids.copy()),
             "api_options": [],
             "default_permission": base_default_permission,
-            "api_permissions": base_permissions,
+            "api_permissions": default_settings.get("permissions", base_permissions),
             "connector": {},
             "has_subcommands": True,
         }
@@ -180,7 +188,7 @@ def cog_subcommand(
             "description": desc,
             "base_desc": base_description,
             "sub_group_desc": subcommand_group_description,
-            "guild_ids": guild_ids,
+            "guild_ids": default_settings.get("guild_ids", guild_ids),
             "api_options": opts,
             "connector": connector,
         }

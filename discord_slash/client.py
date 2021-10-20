@@ -180,7 +180,8 @@ class SlashCommand:
                     self.commands[x.base].has_subcommands = True
 
                 else:
-                    self.commands[x.base] = model.BaseCommandObject(x.base, x.base_command_data)
+                    self.commands[x.base] = model.CogBaseCommandObject(x.base, x.base_command_data)
+                    self.commands[x.base].cog = cog
                 if x.base not in self.subcommands:
                     self.subcommands[x.base] = {}
                 if x.subcommand_group:
